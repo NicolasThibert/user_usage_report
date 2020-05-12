@@ -61,8 +61,7 @@ class Generate extends Command {
 			->setName('usage-report:generate')
 			->setDescription(
 				'Prints a CVS entry with some usage information of the user:' . "\n"
-				. 'userId,date,assignedQuota,usedQuota,numFiles,numShares,numUploads,numDownloads' . "\n"
-				. '"admin","2017-09-18T09:00:01+00:00",5368709120,786432000,1024,23,1400,5678'
+				. 'userId,date,mail,groups'
 			)
 			->addArgument(
 				'user-id',
@@ -74,7 +73,7 @@ class Generate extends Command {
 				'',
 				InputOption::VALUE_REQUIRED,
 				'Separator for the fields in the list',
-				','
+				';'
 			)
 			->addOption(
 				'date-format',
@@ -89,6 +88,13 @@ class Generate extends Command {
 				InputOption::VALUE_NONE,
 				'Should the last login date be included in the report'
 			)
+			->addOption(
+				'last-login-date',
+				'',
+				InputOption::VALUE_REQUIRED,
+				'Minimal last login date ',
+				date("Y-m-d")
+			)
 		;
 	}
 
@@ -102,16 +108,18 @@ class Generate extends Command {
 			$separator = $input->getOption('field-separator');
 
 			$data = '"user-id"'. $separator;
-			$data .= '"date as \'' . $input->getOption('date-format') . '\'"'. $separator;
+			// $data .= '"date as \'' . $input->getOption('date-format') . '\'"'. $separator;
 			if ($input->getOption('last-login')) {
 				$data .= '"last login date as \'' . $input->getOption('date-format') . '\'"'. $separator;
 			}
-			$data .= '"assigned quota (5 GB)"'. $separator;
-			$data .= '"used quota (500 MB)"'. $separator;
-			$data .= 'number of files'. $separator;
-			$data .= 'number of shares'. $separator;
-			$data .= 'number of uploads'. $separator;
-			$data .= 'number of downloads'. $separator;
+			$data .= '"mail adress"'. $separator;
+			$data .= '"groups"'. $separator;
+			// $data .= '"assigned quota (5 GB)"'. $separator;
+			// $data .= '"used quota (500 MB)"'. $separator;
+			// $data .= 'number of files'. $separator;
+			// $data .= 'number of shares'. $separator;
+			// $data .= 'number of uploads'. $separator;
+			// $data .= 'number of downloads'. $separator;
 			$output->writeln($data);
 		}
 
