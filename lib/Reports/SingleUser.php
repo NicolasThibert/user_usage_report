@@ -27,6 +27,8 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\FileInfo;
 use OCP\IConfig;
 use OCP\IDBConnection;
+use OCP\IUser;
+use OCP\IUserManager;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -39,13 +41,17 @@ class SingleUser {
 
 	/** @var IConfig */
 	protected $config;
+	
+	/** @var IUserManager */
+	protected $userManager;	
 
 	/** @var IQueryBuilder[] */
 	protected $queries = [];
 
-	public function __construct(IDBConnection $connection, IConfig $config) {
+	public function __construct(IDBConnection $connection, IConfig $config, IUserManager $userManager) {
 		$this->connection = $connection;
 		$this->config = $config;
+		$this->userManager = $userManager;
 	}
 
 	/**
@@ -55,17 +61,24 @@ class SingleUser {
 	 */
 	public function printReport(InputInterface $input, OutputInterface $output, $userId) {
 		$this->createQueries();
+		$user = $this->userManager->get($userId);
+		
+		$report['mail'] = $user->getEMailAddress();
 
-		$report = array_merge(
-			$this->getNumberOfActionsForUser($userId),
-			$this->getFilecacheStatsForUser($userId)
-		);
+		// $report = array_merge(
+			// $this->getNumberOfActionsForUser($userId),
+			// $this->getFilecacheStatsForUser($userId),
+		// );
 
 		$report['quota'] = $this->getUserQuota($userId);
 		if ($input->getOption('last-login')) {
 			$report['login'] = $this->getUserLastLogin($userId);
 		}
-		$report['shares'] = $this->getNumberOfSharesForUser($userId);
+		// $report['shares'] = $this->getNumberOfSharesForUser($userId);
+		$report['groups'] = $this->getGroupsForUser($userId);
+	
+		if (date($input->getOption('date-format'), $report['login']) < $input->getOption('last-login-date'))
+			exit;	
 
 		$this->printRecord($input, $output, $userId, $report);
 	}
@@ -95,6 +108,26 @@ class SingleUser {
 		$result->closeCursor();
 
 		return $numActions;
+	}
+
+	/**
+	 * @param string $userId
+	 * @return array
+	 */
+	protected function getGroupsForUser($userId) {
+		$query = $this->queries['getGroups'];
+		$query->setParameter('user', $userId);
+		$result = $query->execute();
+
+		while ($row = $result->fetch()) {
+			try {
+				$groups[] = $row['gid'];
+			} catch (\InvalidArgumentException $e) {
+			}
+		}
+		$result->closeCursor();
+		
+		return implode($groups, ',');
 	}
 
 	/**
@@ -277,5 +310,12 @@ class SingleUser {
 			->where($query->expr()->eq('user_id', $query->createParameter('user')))
 			->groupBy('action');
 		$this->queries['countActions'] = $query;
+		
+		// Get groups
+		$query = $this->connection->getQueryBuilder();
+		$query->select(['gid'])
+			->from('group_user')
+			->where($query->expr()->eq('uid', $query->createParameter('user')));
+		$this->queries['getGroups'] = $query;		
 	}
 }

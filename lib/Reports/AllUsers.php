@@ -80,6 +80,7 @@ class AllUsers {
 			'quota' => $this->config->getAppValue('files', 'default_quota', FileInfo::SPACE_UNKNOWN),
 			'shares' => 0,
 			'login' => 0,
+			'mail' => 0,
 		];
 
 		$progress = new ProgressBar($output);
@@ -87,7 +88,7 @@ class AllUsers {
 		$i = 0;
 		$this->userManager->callForAllUsers(function(IUser $user) use ($default, $progress, &$i) {
 			$this->reports[$user->getUID()] = $default;
-
+			$this->reports[$user->getUID()]['mail'] = $user->getEMailAddress();
 			$home = 'home::' . $user->getUID();
 			if (strlen($home) > 64) {
 				$home = md5($home);
@@ -108,19 +109,23 @@ class AllUsers {
 
 		$progress->advance();
 
-		$this->getFilecacheStats($progress);
-		$this->getNumberOfActions($progress);
+		// $this->getFilecacheStats($progress);
+		// $this->getNumberOfActions($progress);
 		$this->getUserQuota($progress);
-		$this->getNumberOfShares($progress);
-		if ($input->getOption('last-login')) {
+		// $this->getNumberOfShares($progress);
+		// if ($input->getOption('last-login')) {
 			$this->getUserLastLogin($progress);
-		}
+		// }
+		$this->getGroups($progress);
 		$progress->advance();
 
 
 		$progress->clear();
 
 		foreach ($this->reports as $userId => $report) {
+			if (date($input->getOption('date-format'), $report['login']) < $input->getOption('last-login-date'))
+				continue;				
+			$report['groups'] = implode($report['groups'], ",");
 			$this->printRecord($input, $output, $userId, $report);
 		}
 	}
@@ -154,6 +159,28 @@ class AllUsers {
 		}
 		$result->closeCursor();
 
+		return $numResults;
+	}
+
+	/**
+	 * @param string $userId
+	 * @return int
+	 */
+	protected function getGroups($userId) {
+		$query = $this->queries['getGroups'];
+		$query->setFirstResult($offset);
+		
+		$result = $query->execute();
+		$numResults = 0;
+		while ($row = $result->fetch()) {
+			try {
+				$this->reports[$row['uid']]['groups'][] = $row['gid'];
+			} catch (\InvalidArgumentException $e) {
+			}
+			$numResults++;
+		}
+		$result->closeCursor();
+		
 		return $numResults;
 	}
 
@@ -407,5 +434,12 @@ class AllUsers {
 			->orderBy('user_id', 'ASC')
 			->addOrderBy('action', 'ASC');
 		$this->queries['countActions'] = $query;
+		
+		// Get groups
+		$query = $this->connection->getQueryBuilder();
+		$query->select(['uid', 'gid'])
+			->from('group_user')
+			->orderBy('uid', 'ASC');
+		$this->queries['getGroups'] = $query;	
 	}
 }
